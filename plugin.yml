@@ -1,10 +1,12 @@
 name: otu
-version: 1.2.6
-api: [1.6.0]
-author: yf001
-authors: ["akaituki8126"]
-description: 荒らしを牢獄へtpしたりすることができるようになります。
 main: otu\otu
+version: 1.2.6
+api: 3.0.0
+author: yf001
+authors:
+  - akaituki8126
+  - yuko fuyutsuki
+description: 荒らしを牢獄へtpしたりすることができるようになります
 
 commands:
   otu:

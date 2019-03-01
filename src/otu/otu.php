@@ -1,21 +1,17 @@
 <?php
 
+declare(strict_types = 1);
+
 namespace otu;
 
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\command\ConsoleCommandSender;
-use pocketmine\Server;
 use pocketmine\Player;
 use pocketmine\event\Listener;
 use pocketmine\plugin\PluginBase;
-use pocketmine\permission\ServerOperator;
 use pocketmine\utils\Config;
-use pocketmine\utils\TextFormat;
-use pocketmine\math\Vector3;
 use pocketmine\level\Position;
-use pocketmine\level\Level;
-
 use pocketmine\event\player\PlayerMoveEvent;
 use pocketmine\event\player\PlayerInteractEvent;
 use pocketmine\event\player\PlayerCommandPreprocessEvent;
@@ -24,54 +20,64 @@ use pocketmine\event\block\BlockPlaceEvent;
 
 class otu extends PluginBase implements Listener {
 
-	//サーバー開始時の処理//プラグインが有効になると実行されるメソッド
+	/** @var Config */
+	private $config;
+	/** @var Config */
+	private $otu;
+	/** @var Config */
+	private $setting;
+	/** @var ?Level */
+	private $level;
+
+	/**
+	 * サーバー開始時の処理//プラグインが有効になると実行されるメソッド
+	 */
 	public function onEnable() {
-		$this->saveResource("setting.yml", false);
-		if(!file_exists($this->getDataFolder())){
-			mkdir($this->getDataFolder(), 0755, true);
-		}
-		$this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML, array("xyz" => "0,0,0,world"));
-		$this->otu = new Config($this->getDataFolder() . "otu.yml", Config::YAML);
-		$this->setting = new Config($this->getDataFolder() . "setting.yml", Config::YAML);
+		$this->initResources();
 		jail::init();//Jailを呼び出しておく
+		$this->loadLevelWithJail();
 		$this->getServer()->getPluginManager()->registerEvents($this, $this);//イベント登録
-		$xyz = explode(',', $this->config->get("xyz"));//x,y,z,worldを配列に変換
-		$this->level = Server::getInstance()->getLevelByName($xyz[3]);
-		if(!($this->level instanceof Level)){//レベルオブジェクトかの判定//違う場合は以下の処理
-			if($this->setting->get("levelload") == true){
-				if(is_dir(Server::getInstance()->getDataPath() . "worlds/" . $xyz[3] . "/")){
-					$this->getLogger()->notice("ワールド" . $xyz[3] . "を読み込みます");
-					Server::getInstance()->loadLevel($xyz[3]);
-					if(Server::getInstance()->getLevelByName($xyz[3]) instanceof Level){//レベルオブジェクトかの判定//違う場合は以下の処理
-						$this->level = Server::getInstance()->getLevelByName($xyz[3]);
-						$this->getLogger()->notice("ワールド" . $xyz[3] . "を使用します");
-					}
-				}else{
-					$this->getLogger()->warning("ワールド{$xyz[3]}が存在しません!");
-					$this->getLogger()->warning("デフォルトで使用されるワールドを使用します");
-					$this->level = Server::getInstance()->getDefaultLevel();
-				}
-			}else{
-				$this->getLogger()->warning("ワールド{$xyz[3]}が読み込まれていません!");
-				$this->getLogger()->warning("デフォルトで使用されるワールドを使用します");
-				$this->level = Server::getInstance()->getDefaultLevel();
-			}
-		}
 	}
-	//サーバー停止時の処理//プラグインが無効になると実行されるメソッド
-	public function onDisable() {//使用しない
+
+	private function initResources() {
+		$dir = $this->getDataFolder();
+		$files = [
+			"setting.yml",
+			"config.yml",
+			"otu.yml"
+		];
+		foreach($files as $file) {
+			$this->saveResource($file);
+		}
+		$this->config = new Config("{$dir}config.yml", Config::YAML);
+		$this->otu = new Config("{$dir}otu.yml", Config::YAML);
+		$this->setting = new Config("{$dir}setting.yml", Config::YAML);
+	}
+
+	private function loadLevelWithJail() {
+		$xyz = explode(',', $this->config->get("xyz"));//x,y,z,worldを配列に変換
+		$target = $xyz[3];
+		$this->getServer()->loadLevel($target);
+		$this->level = $this->getServer()->getLevelByName($target);
+		if ($this->level !== null) {
+			$this->getLogger()->notice("ワールド {$target} を使用します");
+		}else {
+			$this->getLogger()->error("config.yml で指定されたワールド {$target} は存在しません");
+			$this->getServer()->getPluginManager()->disablePlugin($this);
+		}
 	}
 	
 	//コマンド処理
-	public function onCommand(CommandSender $sender, Command $command, $label, array $args) {
-		switch (strtolower($command->getName())) {
-			case "otu"://otuコマンド実行時の処理
-				if(!isset($args[0])){return false;}//例外回避
-				$player = $this->getServer()->getPlayer($args[0]);//プレーヤー名取得
-				if($player instanceof Player){//プレーヤーが存在するかをチェック
-					if(!$this->otu->exists($player->getName())){//otuされてるかを確認!
-						$this->otu->set($player->getName(),"true");//otuリストに追加!
-						$this->otu->save();//セーブ
+	public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool {
+		switch (strtolower($label)) {
+			case "otu":// otuコマンド実行時の処理
+				if(empty($args[0])) return false;// 例外回避
+				$target = $args[0];
+				$player = $this->getServer()->getPlayer($target);// プレーヤー名取得
+				if ($player !== null) {// プレーヤーが存在するかをチェック
+					if (!$this->otu->exists($target)) {// otuされてるかを確認!
+						$this->otu->set($target, "true");// otuリストに追加!
+						$this->otu->save();// セーブ
 						$xyz = explode(',', $this->config->get("xyz"));//x,y,zを配列に変換
 						$v = new Position($xyz[0], $xyz[1], $xyz[2], $this->level);//座標指定
 						$player->teleport($v);//ターゲットを指定した座標へtp!
@@ -324,26 +330,31 @@ class otu extends PluginBase implements Listener {
 	}
 	
 	//コマンドのパラメーターを値に変換し実行する
-	public function CPR($cmd, $p, $o){
-		//player
-		$cmd = str_replace("%p", $p->getName(), $cmd);
-		if($p instanceof Player){
-			$cmd = str_replace("%x", $p->getX(), $cmd);
-			$cmd = str_replace("%y", $p->getY(), $cmd);
-			$cmd = str_replace("%z", $p->getZ(), $cmd);
+	public function commandParameterExchange(string $cmd, Player $p, Player $o){
+		$param = [
+			"%p",
+			"%x",
+			"%y",
+			"%z",
+			"cp",
+			"cx",
+			"cy",
+			"cz"
+		];
+		$replace = [
+			$p->getName(),
+			$p->getX(),
+			$p->getY(),
+			$p->getZ(),
+			$o->getName(),
+			$o->getX(),
+			$o->getY(),
+			$o->getZ()
+		];
+		$cmd = str_replace($param, $replace, $cmd);
+		if (strpos($cmd, '/') !== false) {
+			$cmd = substr($cmd, 1);
 		}
-		//otu
-		$cmd = str_replace("%cp", $o->getName(), $cmd);
-		$cmd = str_replace("%cx", $o->getX(), $cmd);
-		$cmd = str_replace("%cy", $o->getY(), $cmd);
-		$cmd = str_replace("%cz", $o->getZ(), $cmd);
-		if($s = strpos($cmd, '/') !== false){
-			$cmde = explode("/", $cmd);
-			foreach($cmde as $k => $v){
-				$this->getServer()->dispatchCommand(new ConsoleCommandSender(), $v);
-			}
-		}else{
-			$this->getServer()->dispatchCommand(new ConsoleCommandSender(), $cmd);
-		}
+		$this->getServer()->dispatchCommand(new ConsoleCommandSender(), $cmd);
 	}
 }

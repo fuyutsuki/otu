@@ -12,10 +12,6 @@ syakuhou: true
 # / を付けると複数実行できます。　例 tp %p %cp/say [乙]　%cpさんが釈放されました
 otuoffcmd: tp %cp　%p
 
-#/otupで設定されたotuで使用するワールドが読み込まれてない場合otuがワールドを読み込むか
-# ※ワールドが存在しない場合は読み込みません
-levelload: false
-
 #以下あらしへのメッセージの変更
 otu.cmdm.otu.arasi.now: ( ﾟω^ )ゝ 荒らし乙であります！
 otu.cmdm.otu.arasi.off: 釈放～
