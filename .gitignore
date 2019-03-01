@@ -1,0 +1,8 @@
+# Intellij IDEA
+.idea
+
+# VisualStudio Code
+.history
+
+# Composer
+vendor
